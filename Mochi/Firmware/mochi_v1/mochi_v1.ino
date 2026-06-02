@@ -1,4 +1,3 @@
-//git thingy
 #include<Arduino.h>
 #include<Wire.h>
 #include<FluxGarage_RoboEyes.h>
@@ -101,6 +100,10 @@ enum Emotion{
   RELIEVED
 };
 
+void updateSensors(){
+  
+}
+
 void evaluateStateTransitions()
 {
   if(world.edgeDetected){
@@ -115,18 +118,22 @@ void evaluateStateTransitions()
     changeState(STATE_FOCUS);
     return;
   }
-  if(world.objectVisible){
-    changeState(STATE_EXPLORE);
-    return;
-  }
   if(world.objectVisible && world.objectDistance < 50){
     changeState(STATE_INTERACT);
+    return;
+  }
+  if(world.objectVisible){
+    changeState(STATE_EXPLORE);
     return;
   }
   if(!world.edgeDetected && !world.objectVisible && !world.ownerVisible && !world.charging){
     changeState(STATE_IDLE);
     return;
   }
+}
+
+void evaluateEmotion(){
+
 }
 
 void updateNormalIdle()
@@ -708,6 +715,12 @@ void setup() {
 }
 
 void loop() {
+  updateSensors();
+
+  evaluateStateTransitions();
+
+  evaluateEmotion();
+
   switch(currentState)
 {
     case STATE_IDLE:
