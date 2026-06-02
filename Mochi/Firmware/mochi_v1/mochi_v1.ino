@@ -8,6 +8,8 @@
 #define SCREEN_HEIGHT 64
 #define OLED_RESET -1
 
+unsigned long interactionStartTime = 0;
+
 bool glancing = false;
 
 unsigned long nextGlanceTime = 0;
@@ -102,10 +104,13 @@ enum Emotion{
 
 void updateSensors(){
   
-}
+} 
 
 void evaluateStateTransitions()
 {
+  if(currentState == STATE_INTERACT && millis() - interactionStartTime < 5000){
+    return;
+  }
   if(world.edgeDetected){
     changeState(STATE_AVOID);
     return;
@@ -408,25 +413,6 @@ void updateMischief()
     }
 }
 
-void enterConfused()
-{
-    eyes.setWidth(30,30);
-    eyes.setHeight(25,25);
-
-    eyes.setBorderradius(8,8);
-
-    eyes.setSpacebetween(10);
-
-    eyes.setAutoblinker(ON,4,2);
-
-    eyes.setIdleMode(OFF);
-
-    confusedStage = 0;
-
-    nextConfusedLookTime =
-        millis() + 1500;
-}
-
 void updateConfused()
 {
     if(millis() >= nextConfusedLookTime)
@@ -496,6 +482,35 @@ void updateConfused()
 
     eyes.eyeRyNext =
         eyes.eyeRyDefault + confusedTargetY;
+}
+
+void updateInteract(){
+  if(millis()-interactionStartTime >= 10000){
+    changeState(STATE_IDLE);
+  }
+}
+
+void enterInteract(){
+  interactionStartTime = millis();
+}
+
+void enterConfused()
+{
+    eyes.setWidth(30,30);
+    eyes.setHeight(25,25);
+
+    eyes.setBorderradius(8,8);
+
+    eyes.setSpacebetween(10);
+
+    eyes.setAutoblinker(ON,4,2);
+
+    eyes.setIdleMode(OFF);
+
+    confusedStage = 0;
+
+    nextConfusedLookTime =
+        millis() + 1500;
 }
 
 void setEmotion(Emotion e){
@@ -613,6 +628,10 @@ void onEnterState(MochiState s)
         case STATE_FOCUS:
             enterFocus();
             break;
+        
+        case STATE_INTERACT:
+            enterInteract();
+            break;
 
         default:
             break;
@@ -724,20 +743,24 @@ void loop() {
   switch(currentState)
 {
     case STATE_IDLE:
-        updateNormalIdle();
-        break;
+      updateNormalIdle();
+      break;
 
     case STATE_EXPLORE:
-        updateCurious();
-        break;
+      updateCurious();
+      break;
 
     case STATE_AVOID:
-        updatePanic();
-        break;
+      updatePanic();
+      break;
 
     case STATE_FOCUS:
-        updateFocus();
-        break;
+      updateFocus();
+      break;
+
+    case STATE_INTERACT:
+      updateInteract();
+      break;
 
     default:
         break;
