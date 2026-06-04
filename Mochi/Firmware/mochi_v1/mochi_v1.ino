@@ -10,7 +10,7 @@
 
 const int TC_L = 33;
 const int TC_C = 32;
-cosnt int TC_R = 35;
+const int TC_R = 35;
 
 unsigned long interactionStartTime = 0;
 
@@ -72,7 +72,7 @@ struct Percepts
   bool ownerVisible;
   bool objectVisible;
   bool edgeLeft;
-  bool edgecenter;
+  bool edgeCenter;
   bool edgeRight;
   bool batteryLow;
   bool charging;
@@ -108,6 +108,25 @@ enum Emotion{
   RELIEVED
 };
 
+class MotorDriver {
+public:
+  MotorDriver(int ain1, int ain2, int pwma, int bin1, int bin2, int pwmb, int stby);
+
+  void begin();
+  void stop();
+  void forward(uint8_t speed);
+  void back(uint8_t speed);
+  void setMotorSpeeds(int left,int right);
+
+private:
+  int _ain1, _ain2, _pwma, _bin1, _bin2, _pwmb, _stby;
+};
+
+MochiState currentState = STATE_IDLE;
+Emotion currentEmotion = NORMAL;
+
+MotorDriver motor(26, 27, 25, 33, 14, 32, 12);
+
 void updateTCRT(){
   world.edgeCenter = digitalRead(TC_C);
   world.edgeLeft = digitalRead(TC_L);
@@ -115,7 +134,7 @@ void updateTCRT(){
 }
 
 void updateSensors(){
-  
+  updateTCRT();
 } 
 
 void evaluateStateTransitions()
@@ -123,7 +142,7 @@ void evaluateStateTransitions()
   if(currentState == STATE_INTERACT && millis() - interactionStartTime < 5000){
     return;
   }
-  if(world.edgeLeft && world.edgeCenter && world.edgeRight){
+  if(world.edgeLeft || world.edgeCenter || world.edgeRight){
     changeState(STATE_AVOID);
     return;
   }
@@ -143,7 +162,7 @@ void evaluateStateTransitions()
     changeState(STATE_EXPLORE);
     return;
   }
-  if(!world.edgeDetected && !world.objectVisible && !world.ownerVisible && !world.charging){
+  if(!world.edgeLeft && !world.edgeCenter && !world.edgeRight && !world.objectVisible && !world.ownerVisible && !world.charging){
     changeState(STATE_IDLE);
     return;
   }
@@ -235,9 +254,7 @@ void updateCurious()
     }
 }
 
-MochiState currentState = STATE_IDLE;
 
-Emotion currentEmotion = NORMAL;
 
 void updatePanic()
 {
@@ -266,6 +283,59 @@ void updatePanic()
     }
 }
 
+void updateAvoid()
+{
+    if(world.edgeLeft)
+    {
+        Serial.println("EDGE LEFT");
+
+        motor.back(150);
+
+        delay(1000);
+
+        motor.setMotorSpeeds(150,-150);
+
+        delay(500);
+
+        motor.stop();
+
+        changeState(STATE_IDLE);
+    }
+
+    else if(world.edgeRight)
+    {
+        Serial.println("EDGE RIGHT");
+
+        motor.back(150);
+
+        delay(1000);
+
+        motor.setMotorSpeeds(-150,150);
+
+        delay(500);
+
+        motor.stop();
+
+        changeState(STATE_IDLE);
+    }
+
+    else if(world.edgeCenter)
+    {
+        Serial.println("EDGE CENTER");
+
+        motor.back(150);
+
+        delay(1000);
+
+        motor.setMotorSpeeds(150,-150);
+
+        delay(500);
+
+        motor.stop();
+
+        changeState(STATE_IDLE);
+    }
+}
 
 void enterFocus()
 {
@@ -374,60 +444,6 @@ void updateSleepy()
     }
 }
 
-void updateAvoid()
-{
-    if(world.edgeLeft)
-    {
-        Serial.println("EDGE LEFT");
-        
-        moveBackward();
-
-        delay(1000);
-
-        turnRight();
-
-        delay(500);
-
-        stopMotors();
-
-        changeState(STATE_IDLE);
-    }
-
-    else if(world.edgeRight)
-    {
-        Serial.println("EDGE RIGHT");
-
-        moveBackward();
-
-        delay(1000);
-
-        turnLeft();
-
-        delay(500);
-
-        stopMotors();
-
-        changeState(STATE_IDLE);
-    }
-
-    else if(world.edgeCenter)
-    {
-        Serial.println("EDGE CENTER");
-
-        moveBackward();
-
-        delay(1000);
-
-        turnRight();
-
-        delay(500);
-
-        stopMotors();
-
-        changeState(STATE_IDLE);
-    }
-}
-
 void enterMischief()
 {
     eyes.setWidth(30,30);
@@ -445,10 +461,6 @@ void enterMischief()
 
     nextMischiefAction =
         millis() + random(1000,2001);
-}
-
-void enterAvoid(){
-
 }
 
 void updateMischief()
@@ -669,12 +681,12 @@ void setEmotion(Emotion e){
 
 unsigned long stateEnterTime = 0;
 
-  void changeState(MochiState newState){
+void changeState(MochiState newState){
     onExitState(currentState);
     currentState = newState;
     stateEnterTime = millis();
     onEnterState(newState);
-  }
+}
 
 void onEnterState(MochiState s)
 {
@@ -693,7 +705,7 @@ void onEnterState(MochiState s)
 
         case STATE_AVOID:
             setEmotion(PANIC);
-            
+            updateAvoid();
             break;
 
         case STATE_FOCUS:
@@ -720,19 +732,7 @@ void updateInteract();
 void updateAvoid();
 void updateSleep();
 
-class MotorDriver {
-public:
-  MotorDriver(int ain1, int ain2, int pwma, int bin1, int bin2, int pwmb, int stby);
 
-  void begin();
-  void stop();
-  void forward(uint8_t speed);
-  void back(uint8_t speed);
-  void setMotorSpeeds(int left,int right);
-
-private:
-  int _ain1, _ain2, _pwma, _bin1, _bin2, _pwmb, _stby;
-};
 
 MotorDriver::MotorDriver(int ain1, int ain2, int pwma, int bin1, int bin2, int pwmb, int stby) {
   _ain1 = ain1;
@@ -790,7 +790,7 @@ void MotorDriver::stop() {
   digitalWrite(_stby, LOW); 
 }
 
-MotorDriver motor(26, 27, 25, 33, 14, 32, 12);
+
 
 void setup() {
   Serial.begin(115200);
