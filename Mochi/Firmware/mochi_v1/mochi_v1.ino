@@ -8,6 +8,10 @@
 #define SCREEN_HEIGHT 64
 #define OLED_RESET -1
 
+const int TC_L = 33;
+const int TC_C = 32;
+cosnt int TC_R = 35;
+
 unsigned long interactionStartTime = 0;
 
 bool glancing = false;
@@ -67,7 +71,9 @@ struct Percepts
 {
   bool ownerVisible;
   bool objectVisible;
-  bool edgeDetected;
+  bool edgeLeft;
+  bool edgecenter;
+  bool edgeRight;
   bool batteryLow;
   bool charging;
   bool ownerStudying;
@@ -102,6 +108,12 @@ enum Emotion{
   RELIEVED
 };
 
+void updateTCRT(){
+  world.edgeCenter = digitalRead(TC_C);
+  world.edgeLeft = digitalRead(TC_L);
+  world.edgeRight = digitalRead(TC_R);
+}
+
 void updateSensors(){
   
 } 
@@ -111,7 +123,7 @@ void evaluateStateTransitions()
   if(currentState == STATE_INTERACT && millis() - interactionStartTime < 5000){
     return;
   }
-  if(world.edgeDetected){
+  if(world.edgeLeft && world.edgeCenter && world.edgeRight){
     changeState(STATE_AVOID);
     return;
   }
@@ -362,6 +374,60 @@ void updateSleepy()
     }
 }
 
+void updateAvoid()
+{
+    if(world.edgeLeft)
+    {
+        Serial.println("EDGE LEFT");
+        
+        moveBackward();
+
+        delay(1000);
+
+        turnRight();
+
+        delay(500);
+
+        stopMotors();
+
+        changeState(STATE_IDLE);
+    }
+
+    else if(world.edgeRight)
+    {
+        Serial.println("EDGE RIGHT");
+
+        moveBackward();
+
+        delay(1000);
+
+        turnLeft();
+
+        delay(500);
+
+        stopMotors();
+
+        changeState(STATE_IDLE);
+    }
+
+    else if(world.edgeCenter)
+    {
+        Serial.println("EDGE CENTER");
+
+        moveBackward();
+
+        delay(1000);
+
+        turnRight();
+
+        delay(500);
+
+        stopMotors();
+
+        changeState(STATE_IDLE);
+    }
+}
+
 void enterMischief()
 {
     eyes.setWidth(30,30);
@@ -379,6 +445,10 @@ void enterMischief()
 
     nextMischiefAction =
         millis() + random(1000,2001);
+}
+
+void enterAvoid(){
+
 }
 
 void updateMischief()
@@ -623,6 +693,7 @@ void onEnterState(MochiState s)
 
         case STATE_AVOID:
             setEmotion(PANIC);
+            
             break;
 
         case STATE_FOCUS:
@@ -727,6 +798,9 @@ void setup() {
   display.begin(SSD1306_SWITCHCAPVCC,0x3C);
   eyes.begin(128,64,100);
   randomSeed(micros());
+  pinMode(TC_L, INPUT);
+  pinMode(TC_C, INPUT);
+  pinMode(TC_R, INPUT);
 
   setEmotion(CONFUSED);
 
