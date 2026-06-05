@@ -108,6 +108,15 @@ enum Emotion{
   RELIEVED
 };
 
+enum AvoidPhase{
+  AVOID_REVERSE,
+  AVOID_TURN,
+  AVOID_RECOVER
+};
+
+AvoidPhase avoidphase;
+unsigned long avoidStartTime = 0;
+
 class MotorDriver {
 public:
   MotorDriver(int ain1, int ain2, int pwma, int bin1, int bin2, int pwmb, int stby);
@@ -283,58 +292,45 @@ void updatePanic()
     }
 }
 
-void updateAvoid()
-{
-    if(world.edgeLeft)
-    {
-        Serial.println("EDGE LEFT");
+void updateAvoid(){
+  switch(avoidPhase)  {
+    case AVOID_REVERSE:
+    
+    motor.back(150);
+     if(millis() - avoidStartTime > 1000){
+      motor.stop(
 
-        motor.back(150);
+      avoidPhase = AVOID_TURN;
+      avoidStartTime = millis();
+     }
+    break;
 
-        delay(1000);
-
+    case AVOID_TURN:
+    if(world.edgeLeft){
+      motor.setMotorSpeeds(150,-150);
+    }else if(world.edgeRight){
+      motor.setMotorSpeeds(-150,150);
+    }else if(world.edgeCenter){
+      if(random(0,2) == 0){
         motor.setMotorSpeeds(150,-150);
-
-        delay(500);
-
-        motor.stop();
-
-        changeState(STATE_IDLE);
-    }
-
-    else if(world.edgeRight)
-    {
-        Serial.println("EDGE RIGHT");
-
-        motor.back(150);
-
-        delay(1000);
-
+      }else{
         motor.setMotorSpeeds(-150,150);
-
-        delay(500);
-
-        motor.stop();
-
-        changeState(STATE_IDLE);
+      }
     }
-
-    else if(world.edgeCenter)
-    {
-        Serial.println("EDGE CENTER");
-
-        motor.back(150);
-
-        delay(1000);
-
-        motor.setMotorSpeeds(150,-150);
-
-        delay(500);
-
-        motor.stop();
-
-        changeState(STATE_IDLE);
+    if(millis() - avoidStartTime > 500){
+    motor.stop();
+    avoidPhase = AVOID_RECOVER;
+    avoidStartTime = millis();
     }
+    break;
+
+    case AVOID_RECOVER:
+    if(millis() - avoidStartTime > 500){
+      setEmotion(RELIEVED);
+      changeState(STATE_IDLE);
+    }
+    break;
+  }
 }
 
 void enterFocus()
@@ -595,6 +591,12 @@ void enterConfused()
         millis() + 1500;
 }
 
+void enterAvoid(){
+  avoidPhase = AVOID_REVERSE;
+  avoidStartTime = millis();
+  setEmotion(PANIC);
+}
+
 void setEmotion(Emotion e){
   currentEmotion = e;
 
@@ -704,8 +706,7 @@ void onEnterState(MochiState s)
             break;
 
         case STATE_AVOID:
-            setEmotion(PANIC);
-            updateAvoid();
+            enterAvoid();
             break;
 
         case STATE_FOCUS:
@@ -791,7 +792,6 @@ void MotorDriver::stop() {
 }
 
 
-
 void setup() {
   Serial.begin(115200);
   Wire.begin(21,22);
@@ -825,7 +825,7 @@ void loop() {
       break;
 
     case STATE_AVOID:
-      updatePanic();
+      updateAvoid();
       break;
 
     case STATE_FOCUS:
