@@ -118,8 +118,19 @@ enum AvoidPhase{
   AVOID_RECOVER
 };
 
+enum InteractPhase
+{
+    INTERACT_LOOK,
+    INTERACT_LOOK_LEFT,
+    INTERACT_LOOK_RIGHT,
+    INTERACT_COMPLETE
+};
+
+InteractPhase interactPhase;
+unsigned long interactStarttime = 0;
+
 AvoidPhase avoidphase;
-unsigned long avoidStartTime = 0;
+unsigned long avoidStarttime = 0;
 
 class MotorDriver {
 public:
@@ -343,6 +354,12 @@ void updateAvoid(){
     }
     break;
   }
+}
+
+void enterInteract(){
+  interactStarttime = millis();
+  interactPhase = INTERACT_LOOK;
+  setEmotion(CURIOUS);
 }
 
 void enterFocus()
@@ -575,8 +592,29 @@ void updateConfused()
 }
 
 void updateInteract(){
-  if(millis()-interactionStartTime >= 10000){
-    changeState(STATE_IDLE);
+  switch(interactPhase){
+    case INTERACT_LOOK:
+    if(millis() - interactStarttime > 1000){
+      interactPhase = INTERACT_LOOK_LEFT;
+      interactStarttime = millis();
+    }
+    break;
+
+    case INTERACT_LOOK_LEFT:
+    motor.setMotorSpeeds(-50,50);
+    if(millis() - interactStarttime > 1000){
+      interactPhase = INTERACT_LOOK_RIGHT;
+      interactStarttime = millis();
+    }
+    break;
+
+    case INTERACT_LOOK_RIGHT:
+    motor.setMotorSpeeds(50,-50);
+    if(millis() - interactStarttime > 1000){
+      changeState(STATE_IDLE);
+    }
+    break;
+  }
   }
 }
 
