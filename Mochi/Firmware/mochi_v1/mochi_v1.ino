@@ -3,6 +3,7 @@
 #include<FluxGarage_RoboEyes.h>
 #include<Adafruit_GFX.h>
 #include<Adafruit_SSD1306.h>
+#include<Adafruit_VL53L0X.h>
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
@@ -77,13 +78,16 @@ struct Percepts
   bool batteryLow;
   bool charging;
   bool ownerStudying;
+  bool objectClose;
   int objectX;
   int objectY;
   int objectDistance;
-  int frontDistance;
+  int frontDistance; 
 };
 
 Percepts world;
+
+Adafruit_VL53L0X lox;
 
 enum MochiState{
   STATE_IDLE,
@@ -142,8 +146,16 @@ void updateTCRT(){
   world.edgeRight = digitalRead(TC_R);
 }
 
+void updateVL(){
+  VL53L0X_RangingMeasurementData_t measure;
+  lox.rangingTest(&measure,false);
+  world.frontDistance = measure.RangeMilliMeter;
+  world.objectClose = measure.RangeMilliMeter < 200;
+}
+
 void updateSensors(){
   updateTCRT();
+  updateVL();
 } 
 
 void evaluateStateTransitions()
@@ -293,14 +305,14 @@ void updatePanic()
 }
 
 void updateAvoid(){
-  switch(avoidPhase)  {
+  switch(avoidphase){
     case AVOID_REVERSE:
     
     motor.back(150);
      if(millis() - avoidStartTime > 1000){
-      motor.stop(
+      motor.stop();
 
-      avoidPhase = AVOID_TURN;
+      avoidphase = AVOID_TURN;
       avoidStartTime = millis();
      }
     break;
@@ -319,7 +331,7 @@ void updateAvoid(){
     }
     if(millis() - avoidStartTime > 500){
     motor.stop();
-    avoidPhase = AVOID_RECOVER;
+    avoidphase = AVOID_RECOVER;
     avoidStartTime = millis();
     }
     break;
@@ -592,7 +604,7 @@ void enterConfused()
 }
 
 void enterAvoid(){
-  avoidPhase = AVOID_REVERSE;
+  avoidphase = AVOID_REVERSE;
   avoidStartTime = millis();
   setEmotion(PANIC);
 }
@@ -698,23 +710,28 @@ void onEnterState(MochiState s)
     switch(s)
     {
         case STATE_IDLE:
+            Serial.println("IDLE");
             setEmotion(NORMAL);
             break;
 
         case STATE_EXPLORE:
             setEmotion(CURIOUS);
+            Serial.println("EXPLORE");
             break;
 
         case STATE_AVOID:
             enterAvoid();
+            Serial.println("AVOID");
             break;
 
         case STATE_FOCUS:
             enterFocus();
+            Serial.println("FOCUS");
             break;
         
         case STATE_INTERACT:
             enterInteract();
+            Serial.println("INTERACT");
             break;
 
         default:
@@ -726,14 +743,6 @@ void onExitState(MochiState s) {
   Serial.print("EXIT ");
   Serial.println(s);
 }
-
-void updateIdle();
-void updateExplore();
-void updateInteract();
-void updateAvoid();
-void updateSleep();
-
-
 
 MotorDriver::MotorDriver(int ain1, int ain2, int pwma, int bin1, int bin2, int pwmb, int stby) {
   _ain1 = ain1;
