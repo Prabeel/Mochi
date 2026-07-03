@@ -169,6 +169,13 @@ void updateSensors(){
   updateVL();
 } 
 
+void changeState(MochiState newState){
+    onExitState(currentState);
+    currentState = newState;
+    stateEnterTime = millis();
+    onEnterState(newState);
+}
+
 void evaluateStateTransitions()
 {
   if(currentState == STATE_INTERACT && millis() - interactionStartTime < 5000){
@@ -733,12 +740,7 @@ void setEmotion(Emotion e){
 
 unsigned long stateEnterTime = 0;
 
-void changeState(MochiState newState){
-    onExitState(currentState);
-    currentState = newState;
-    stateEnterTime = millis();
-    onEnterState(newState);
-}
+
 
 void onEnterState(MochiState s)
 {
