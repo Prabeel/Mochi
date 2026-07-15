@@ -48,7 +48,21 @@ with mp_face_detection.FaceDetection(model_selection=0,min_detection_confidence=
             cv2.circle(frame,(x,y),5,(0,0,255),-1)
 
             cv2.circle(frame,(facex,facey),5,(0,255,0),-1)
-            print(facex,facey)
+
+            error_x = facex - x
+            error_y = facey - y
+            print(error_x,error_y)
+
+            threshold = 30
+
+            if error_x > threshold:
+                print("TURN LEFT")
+
+            elif error_x < -threshold:
+                print("TURN RIGHT")
+
+            else:
+                print("CENTERED")
 
         cv2.imshow('MediaPipe Face Detection', frame)
 

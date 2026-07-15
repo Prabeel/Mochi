@@ -4,10 +4,14 @@
 #include<Adafruit_GFX.h>
 #include<Adafruit_SSD1306.h>
 #include<Adafruit_VL53L0X.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
 #define OLED_RESET -1
+
+Adafruit_MPU6050 mpu;
 
 const int TC_L = 33;
 const int TC_C = 32;
@@ -62,6 +66,8 @@ unsigned long nextConfusedLookTime = 0;
 int confusedTargetX = 0;
 int confusedTargetY = 0;
 
+unsigned long stateEnterTime = 0;
+
 Adafruit_SSD1306 display(
   SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET
 );
@@ -83,6 +89,13 @@ struct Percepts
   int objectY;
   int objectDistance;
   int frontDistance; 
+
+  float accelX;
+  float accelY;
+  float accelZ;
+  float gyroX;
+  float gyroY;
+  float gyroZ;
 };
 
 Percepts world;
@@ -130,7 +143,7 @@ InteractPhase interactPhase;
 unsigned long interactStarttime = 0;
 
 AvoidPhase avoidphase;
-unsigned long avoidStarttime = 0;
+unsigned long avoidStartTime = 0;
 
 class MotorDriver {
 public:
@@ -149,30 +162,80 @@ private:
 MochiState currentState = STATE_IDLE;
 Emotion currentEmotion = NORMAL;
 
-MotorDriver motor(26, 27, 25, 33, 14, 32, 12);
+MotorDriver motor(26, 27, 25, 18, 19, 23, 12);
+
+void updateIMU(){
+  sensors_event_t accel;
+  sensors_event_t gyro;
+  sensors_event_t temp;
+
+  mpu.getEvent(&accel, &gyro, &temp);
+
+  Serial.print("Accel X: ");
+  Serial.print(accel.acceleration.x);
+
+  Serial.print("  Y: ");
+  Serial.print(accel.acceleration.y);
+
+  Serial.print("  Z: ");
+  Serial.println(accel.acceleration.z);
+
+  world.accelX = accel.acceleration.x;
+  world.accelY = accel.acceleration.y;
+  world.accelZ = accel.acceleration.z;
+
+  world.gyroX = gyro.gyro.x;
+  world.gyroY = gyro.gyro.y;
+  world.gyroZ = gyro.gyro.z;
+}
 
 void updateTCRT(){
   world.edgeCenter = digitalRead(TC_C);
+  Serial.print("Center: ");
+  Serial.println(world.edgeCenter);
+
   world.edgeLeft = digitalRead(TC_L);
+  Serial.print("Left: ");
+  Serial.println(world.edgeLeft);
+
   world.edgeRight = digitalRead(TC_R);
+  Serial.print("Right: ");
+  Serial.println(world.edgeRight);
 }
 
 void updateVL(){
   VL53L0X_RangingMeasurementData_t measure;
   lox.rangingTest(&measure,false);
+
+  if(measure.RangeStatus != 4){
   world.frontDistance = measure.RangeMilliMeter;
   world.objectClose = measure.RangeMilliMeter < 200;
+
+  Serial.print("Dist: ");
+  Serial.println(world.frontDistance);
+  }else{
+    Serial.println("Out of Range");
+  }
 }
 
 void updateSensors(){
   updateTCRT();
   updateVL();
+  updateIMU();
 } 
 
-void changeState(MochiState newState){
+void changeState(MochiState newState)
+{
+    if (newState == currentState)
+    {
+        return;
+    }
+
     onExitState(currentState);
+
     currentState = newState;
     stateEnterTime = millis();
+
     onEnterState(newState);
 }
 
@@ -622,11 +685,6 @@ void updateInteract(){
     }
     break;
   }
-  }
-}
-
-void enterInteract(){
-  interactionStartTime = millis();
 }
 
 void enterConfused()
@@ -738,10 +796,6 @@ void setEmotion(Emotion e){
   }
 }
 
-unsigned long stateEnterTime = 0;
-
-
-
 void onEnterState(MochiState s)
 {
     Serial.print("ENTER ");
@@ -784,67 +838,26 @@ void onExitState(MochiState s) {
   Serial.println(s);
 }
 
-MotorDriver::MotorDriver(int ain1, int ain2, int pwma, int bin1, int bin2, int pwmb, int stby) {
-  _ain1 = ain1;
-  _ain2 = ain2;
-  _pwma = pwma;
-  _bin1 = bin1;
-  _bin2 = bin2;
-  _pwmb = pwmb;
-  _stby = stby;
-}
-
-void MotorDriver::begin() {
-  pinMode(_ain1, OUTPUT);
-  pinMode(_ain2, OUTPUT);
-  pinMode(_pwma, OUTPUT);
-  pinMode(_bin1, OUTPUT);
-  pinMode(_bin2, OUTPUT);
-  pinMode(_pwmb, OUTPUT);
-  pinMode(_stby, OUTPUT);
-  stop(); 
-}
-
-void MotorDriver::setMotorSpeeds(int left, int right){
-  digitalWrite(_stby, HIGH);
-
-  if(left >= 0){
-    digitalWrite(_ain1,HIGH);
-    digitalWrite(_ain2,LOW);
-  }else{
-    digitalWrite(_ain1,LOW);
-    digitalWrite(_ain2,HIGH);
-    left = -left;
-  }
-
-  if(right >= 0){
-    digitalWrite(_bin1,HIGH);
-    digitalWrite(_bin2,LOW);
-  }else{
-    digitalWrite(_bin1,LOW);
-    digitalWrite(_bin2,HIGH);
-    right = -right;
-  }
-}
-
-void MotorDriver::forward(uint8_t speed) {
-  setMotorSpeeds(speed,speed);
-}
-
-void MotorDriver::back(uint8_t speed) {
-  setMotorSpeeds(-speed,-speed);
-}
-
-void MotorDriver::stop() {
-  setMotorSpeeds(0,0);
-  digitalWrite(_stby, LOW); 
-}
-
-
 void setup() {
   Serial.begin(115200);
   Wire.begin(21,22);
+
+  if (!mpu.begin()) {
+    Serial.println("MPU6050 FAILED");
+    while (1);
+  }
+
+  Serial.println("MPU6050 OK");
+
+  if (!lox.begin()) {
+  Serial.println("VL53L0X FAILED");
+  while (1);
+  }
+
+  Serial.println("VL53L0X OK");
+
   display.begin(SSD1306_SWITCHCAPVCC,0x3C);
+  motor.begin();
   eyes.begin(128,64,100);
   randomSeed(micros());
   pinMode(TC_L, INPUT);
@@ -855,6 +868,36 @@ void setup() {
 
   nextGlanceTime = millis() + random(6000,10001);
 }
+
+// void loop() {
+//   digitalWrite(12, HIGH);  // STBY
+
+//   digitalWrite(26, HIGH);
+//   digitalWrite(27, LOW);
+
+//   digitalWrite(25, HIGH);  // PWMA HIGH
+
+//   while (1);
+// }
+
+// void loop() {
+
+//   Serial.println("Forward");
+//   motor.forward(150);
+//   delay(2000);
+
+//   Serial.println("Stop");
+//   motor.stop();
+//   delay(1000);
+
+//   Serial.println("Backward");
+//   motor.back(150);
+//   delay(2000);
+
+//   Serial.println("Stop");
+//   motor.stop();
+//   delay(1000);
+// }
 
 void loop() {
   updateSensors();
